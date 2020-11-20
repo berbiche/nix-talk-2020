@@ -1,0 +1,83 @@
+#+TITLE: Nix & Nixpkgs for a Reproducible and Declarative Build Environment
+#+AUTHOR: Nicolas Berbiche
+#+DATE: 2020-11-15
+#+EMAIL: nicolas@normie.dev
+
+#+OPTIONS: num:nil date:nil toc:nil
+#+REVEAL_ROOT: https://cdn.jsdelivr.net/npm/reveal.js
+#+REVEAL_INIT_OPTIONS: width: 1200, height: 800, margin: 0.1, transition: 'fade', slideNumber: true
+#+REVEAL_TRANS: slide
+#+REVEAL_HLEVEL: 2
+#+REVEAL_THEME: black
+#+REVEAL_POSTAMBLE: <p>Create by %a.</p>
+#+REVEAL_PLUGINS:(markdown notes highlight)
+#+REVEAL_EXTRA_CSS: style.css
+
+* Context
+
+** What is a package manager's role?
+#+ATTR_REVEAL: :frag (frag-style appear)
+- Keep track of installed packages
+- Provide a way to install a package
+- Provide a way to uninstall a package
+- Provide a way to upgrade a package
+
+** A look at RPM
+#+ATTR_REVEAL: :frag (frag-style appear)
+- Used by Debian and its derivatives
+- Provides hooks to describe:
+  - An installation phase
+  - A build phase
+  - The "uninstall phase" is implicit (all installed files are to be removed)
+- A single path can be provided by a single package
+
+#+REVEAL: split
+#+ATTR_REVEAL: :code_attribs data-line-numbers='|9-11|13-14|16-19'
+#+BEGIN_SRC conf
+Summary: Hello World program
+Name: hello
+Version: 1.0
+Source0: %{name}-%{version}.tar.gz
+Require:
+
+%description
+This program prints out "HelloWorld".
+
+%build
+./configure --prefix=%{_prefix}
+make
+
+%install
+make install
+
+%files
+/usr/bin/hello
+/usr/share/man/man1/hello.1.gz
+/etc/hello.conf
+#+END_SRC
+#+BEGIN_NOTES
+This RPM spec file is not typical in that it doesn't use some of the available macros
+like ~%make_install~ and ~%configure~.
+#+END_NOTES
+
+** Issues with RPM
+- Atomic upgrades?
+
+
+** Environment issues
+:PROPERTIES:
+:reveal_background: #FFFF00
+:reveal_background_trans: fade
+:END:
+
+** Manageability issues
+
+
+* Nix : The Language
+
+** Syntax
+
+
+* Nix : The Package Manager
+
+* Nixpkgs : The Package Registry
