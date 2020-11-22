@@ -8,7 +8,7 @@
 #+REVEAL_ROOT: https://cdn.jsdelivr.net/npm/reveal.js
 #+REVEAL_INIT_OPTIONS: width: 1200, height: 800, margin: 0.1, transition: 'fade', slideNumber: true
 #+REVEAL_TRANS: slide
-#+REVEAL_MIN_SCALE: 0.5
+#+REVEAL_MIN_SCALE: 0.8
 #+REVEAL_MAX_SCALE: 2.5
 #+REVEAL_HLEVEL: 2
 #+REVEAL_THEME: black
@@ -119,10 +119,11 @@ like ~%make_install~ and ~%configure~.
 
 * Nix : The Package Manager
 ** Features
+#+ATTR_REVEAL: :frag (frag-style appear)
 - Rollback to previous configurations
 - Atomic installation and upgrade
 - High-level domain-specific language to define a /package/
-- Multiple version of a /package/ can coexist
+- Multiple versions of a /package/ can coexist
 - Deterministic build of components
   - As long as the derivation is deterministic
   - Implies reproducibility
@@ -130,7 +131,8 @@ like ~%make_install~ and ~%configure~.
 #+REVEAL: split
 - Sandboxed builds
   - No network access inside the build environment
-    - Unless a /fixed output derivation/ is produced (the hash of the resulting content is known in advance)
+    Unless the hash of the resulting content is known in advance (fixed output derivation)
+  - The builder starts with absolutely no environment variables
 
 #+BEGIN_NOTES
 Some of the Nix-specific language used in the following slides will be explained further in this section.
@@ -145,6 +147,25 @@ Some of the Nix-specific language used in the following slides will be explained
 "The set of paths that might be accessed in an execution involving the component"[fn:phd-thesis]
 
 Upon building a derivation, Nix will represent the closure using a format known as NAR.
+
+** What Is a "nar"
+The /Nix Archive Format/ (short NAR) fixes incompatibilities of ZIP and TAR with the store model.
+
+This format is what is used to compute hashes of a derivation.
+
+- Omit time stamps of files
+- Omit ownership of files
+- Support files larger than 2^32 bytes
+- Preserve only the executable bit
+- Guarantee an ordering of the files in the archive
+#+BEGIN_NOTES
+It goes that /files/ means both regular files and directories.
+
+The exact format of a NAR is defined in Chapter 5 of Edolstra's thesis.
+Edolstra's thesis is no longer exact on certain properties:
+- Berkeley DB is not used anymore to retain information about the store's state,
+  instead flat files are used.
+#+END_NOTES
 
 ** The /nix/store
 #+ATTR_REVEAL: :frag (appear)
@@ -180,25 +201,6 @@ To allow sharing derivations across machines, the store paths have to be the sam
 
 This will be further expanded later.
 
-** What Is a "nar"
-The /Nix Archive Format/ (short NAR) fixes incompatibilities of ZIP and TAR with the store model.
-
-This format is what is used to compute hashes of a derivation.
-
-- Omit time stamps of files
-- Omit ownership of files
-- Support files larger than 2^32 bytes
-- Preserve only the executable bit
-- Guarantee an ordering of the files in the archive
-#+BEGIN_NOTES
-It goes that /files/ means both regular files and directories.
-
-The exact format of a NAR is defined in Chapter 5 of Edolstra's thesis.
-Edolstra's thesis is no longer exact on certain properties:
-- Berkeley DB is not used anymore to retain information about the store's state,
-  instead flat files are used.
-#+END_NOTES
-
 ** Computing a /Package/'s /store path/
 - 32 characters long base-32 (=0-9a-z= except =e,o,u,t=) encoded hash (160 entropy bits)
 - Determined by the /closure/ of a package
@@ -212,9 +214,6 @@ Fun fact: the characters =e,o,u,t= are excluded to prevent the creation of a has
   is composed of both the store path and the symbolic name
 - Source inputs and outputs have a different hash to prevent impersonation
 
-#+REVEAL: split
-1.
-
 #+BEGIN_NOTES
 For more information on the cryptographic function, the chapter 5 of Edolstra's thesis goes into the finer defailts of choosing the right hashing function.
 
@@ -224,15 +223,62 @@ Collision resistance: making sure no two =x_1= and =x_2= -> =h(x_1) = h(x_2)=
 Second preimage resistance: if =x_1= is known, is it not possible to derive =x_2= such that =h(x_1) = h(x_2)=
 #+END_NOTES
 
-** Fixed Output Path and /Fixed Output Derivations/
-
-
 * Nix : The Language
 
-** Example package
+** Example package with syntax
 
+#+ATTR_REVEAL: :code_attribs data-line-numbers="|1-5|7-9|10,14|24-30|32-33|38-43"
+#+BEGIN_SRC nix
+{ stdenv, fetchurl, coreutils, pam, groff, sssd
+, sendmailPath ? "/run/wrappers/bin/sendmail"
+, withInsults ? false
+, withSssd ? false
+}:
 
-** Syntax
+let
+  inherit (stdenv.lib) optional;
+in
+stdenv.mkDerivation rec {
+  pname = "sudo";
+  version = "1.9.3p1";
+
+  src = fetchurl {
+    url = "https://www.sudo.ws/dist/${pname}-${version}.tar.gz";
+    sha256 = "17mldsg5d08s23cskmjxfa81ibnqw3slgf3l4023j72ywi9xxffw";
+  };
+
+  prePatch = ''
+    # do not set sticky bit in nix store
+    substituteInPlace src/Makefile.in --replace 04755 0755
+  '';
+
+  configureFlags = [
+    # ...
+    "--enable-tmpfiles.d=no"
+  ] ++ optional withInsults [
+    "--with-insults"
+    "--with-all-insults"
+  ];
+
+  nativeBuildInputs = [ groff ];
+  buildInputs = [ pam ];
+
+  enableParallelBuilding = true;
+  doCheck = false;
+
+  meta = with stdenv.lib; {
+    description = "A command to run commands as root";
+    license = "https://www.sudo.ws/sudo/license.html";
+    maintainers = with maintainers; [ eelco delroth ];
+    platforms = platforms.linux;
+  };
+}
+#+END_SRC
+#+BEGIN_NOTES
+This is not the full /sudo/ expression.
+#+END_NOTES
+
+** Links
 
 #+NAME: Links
 #+CAPTION: Useful links
@@ -241,6 +287,25 @@ Second preimage resistance: if =x_1= is known, is it not possible to derive =x_2
 |             |                                                                 |
 
 ** Nix REPL
+
+#+BEGIN_EXAMPLE sh
+$ nix repl '<nixpkgs>'
+Welcome to Nix version 3.0pre20201020_e0ca98c. Type :? for help.
+
+Loading '<nixpkgs>'...
+Added 12635 variables.
+
+nix-repl> lib.<TAB>
+lib.__unfix                          lib.mapAttrsFlatten
+lib.add                              lib.mapAttrsRecursive
+...
+
+nix-repl> pkgs.hello<TAB>
+pkgs.hello         pkgs.hello-unfree
+
+nix-repl> pkgs.hello
+«derivation /nix/store/j6lmvi01h17w5a1lx41xwgw00j0wbz6g-hello-2.10.drv»
+#+END_EXAMPLE
 
 * Nixpkgs : The Package Registry
 #+REVEAL: split
