@@ -1,5 +1,10 @@
 /* @LICENSE: MIT */
+@import url('https://fonts.googleapis.com/css2?family=Source+Code+Pro&display=swap');
 
 .align-left {
     text-align: left;
+}
+
+code {
+    font-family: 'Source Code Pro', monospace !important;
 }

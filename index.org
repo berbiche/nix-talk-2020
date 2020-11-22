@@ -4,28 +4,56 @@
 #+EMAIL: nicolas@normie.dev
 
 #+OPTIONS: num:nil date:nil toc:nil
+#+OPTIONS: reveal_center:t reveal_progress:t reveal_history:t reveal_control:t
 #+REVEAL_ROOT: https://cdn.jsdelivr.net/npm/reveal.js
 #+REVEAL_INIT_OPTIONS: width: 1200, height: 800, margin: 0.1, transition: 'fade', slideNumber: true
 #+REVEAL_TRANS: slide
+#+REVEAL_MIN_SCALE: 0.5
+#+REVEAL_MAX_SCALE: 2.5
 #+REVEAL_HLEVEL: 2
 #+REVEAL_THEME: black
 #+REVEAL_POSTAMBLE: <p>Create by %a.</p>
 #+REVEAL_PLUGINS:(markdown notes highlight)
 #+REVEAL_EXTRA_CSS: style.css
 
+* Table of Contents
+
+- [[Context][Context]]
+  + [[What Is a Package Manager's Role?][What Is a Package Manager's Role?]]
+  + [[A Look at RPM][A Look at RPM]]
+  + [[Issues With RPM][Issues With RPM]]
+  + [[Issues With Most Package Managers][Issues With Most Package Managers]]
+- [[Nix : The Package Manager][Nix : The Package Manager]]
+  + [[Features][Features]]
+  + [[The /nix/store][The ~/nix/store~]]
+    - [[Computing a /Package/'s /store path/][Computing a /Package/'s /store path/]]
+  + [[What Is a Closure][What Is a Closure]]
+  + [[What Is a Derivation][What Is a Derivation]]
+  + [[What Is a "nar"][What Is a "nar"]]
+#+REVEAL: split
+- [[Nix : The Language][Nix : The Language]]
+- [[Nixpkgs : The Package Registry][Nixpkgs : The Package Registry]]
+  + [[Contributing to The Project][Contributing to The Project]]
+#+REVEAL: split
+- [[Extras][Extras]]
+  + [[NixOS][NixOS]]
+  + [[home-manager][home-manager]]
+- [[Further reading][Further Reading]]
+
 * Context
 
-** What is a package manager's role?
+** What Is a Package Manager's Role?
 #+ATTR_REVEAL: :frag (frag-style appear)
 - Keep track of installed packages
 - Provide a way to install a package
 - Provide a way to uninstall a package
 - Provide a way to upgrade a package
 
-** A look at RPM
+** A Look at RPM
 #+ATTR_REVEAL: :frag (frag-style appear)
-- Used by Debian and its derivatives
+- Used by Fedora and its derivatives
 - Provides hooks to describe:
+  #+ATTR_REVEAL: :frag (frag-style appear)
   - An installation phase
   - A build phase
   - The "uninstall phase" is implicit (all installed files are to be removed)
@@ -38,7 +66,6 @@ Summary: Hello World program
 Name: hello
 Version: 1.0
 Source0: %{name}-%{version}.tar.gz
-Require:
 
 %description
 This program prints out "HelloWorld".
@@ -60,24 +87,109 @@ This RPM spec file is not typical in that it doesn't use some of the available m
 like ~%make_install~ and ~%configure~.
 #+END_NOTES
 
-** Issues with RPM
-- Atomic upgrades?
+** Issues With RPM
+#+ATTR_REVEAL: :frag (frag-style appear)
+- Build environment inherits pre-installed dependencies
+  - Having a working build across many machines is harder
+  - Can be resolved by using ~Mock~ instead of ~rpmbuild~ (just a chroot)
+- Not possible to do atomic upgrades of a package
+  - Race conditions
+    #+BEGIN_NOTES
+    Service =hello-world= is running, using the =hello= binary and the =hello.conf= file. Package =hello= is ugpraded and the service, at the same time, having encountered a failure, restarts, using the new binary but the old configuration file.
+    #+END_NOTES
+- Only a single version of a component can be installed at a given time
+
+** Issues With Most Package Managers
+#+ATTR_REVEAL: :frag (frag-style appear)
+- Dependency specifications are not validated
+  - Unclean build environment
+- Dependency specifications are not exact, they are /nominal/ (this is explained later)
+- Two dependencies cannot provide the same path (conflict between dependencies)
+#+REVEAL: split
+- No concept of /all-or-nothing/
+  #+BEGIN_NOTES
+  _all-or-nothing_: That is, either the system succesfully build with all files
+  correctly installed or fails and does not leave you in a partial install state.
+  #+END_NOTES
+- No control over external dependency management (pypi, npm, gems, etc.)
+- No way to represent multiple dependencies grouped together (composition)
+  #+BEGIN_NOTES
+  _composition_: Some package managers have no way to represent the composition of multiple dependencies as a single unit
+  #+END_NOTES
+
+* Nix : The Package Manager
+** Features
+- Rollback to previous configurations
+- Atomic installation and upgrade
+- High-level domain-specific language to define a /package/
+- Multiple version of a /package/ can exist
+- Deterministic build of components
+  - As long as Nix expression is deterministic
+  - Implies reproducibility
+
+** The /nix/store
+When you install a /package/, Nix stores the package under the ~/nix/store~,
+with all its dependencies (what is refered to as the closure).
 
 
-** Environment issues
-:PROPERTIES:
-:reveal_background: #FFFF00
-:reveal_background_trans: fade
-:END:
+#+REVEAL: split
+Each /package/ is stored under a unique filename
+#+BEGIN_SRC console
+/nix/store/13xq2f3q1k64w4f8xbvnb4p0g4754wrk-emacs-ox-reveal-20201025.952
+├── nix-support
+│   ├── propagated-build-inputs
+│   ├── propagated-user-env-packages
+│   └── setup-hook
+└── share
+    └── emacs
+        └── site-lisp
+            └── elpa
+                └── ox-reveal-20201025.952
+                    ├── ox-reveal-autoloads.el
+                    ├── ox-reveal.el
+                    ├── ox-reveal.elc
+                    └── ox-reveal-pkg.el
+#+END_SRC
+*** Computing a /Package/'s /store path/
+- 32 characters long base-32 encoded hash
+-
 
-** Manageability issues
-
+** What Is a Closure
+** What Is a Derivation
+** What Is a "nar"
 
 * Nix : The Language
 
+** Example package
+
+
 ** Syntax
 
-
-* Nix : The Package Manager
+#+NAME: Links
+#+CAPTION: Useful links
+| builtins    | https://nixos.org/manual/nix/unstable/expressions/builtins.html |
+| nixpkgs lib | https://nixos.org/manual/nixpkgs/unstable/#chap-functions       |
+|             |                                                                 |
 
 * Nixpkgs : The Package Registry
+#+REVEAL: split
+#+CAPTION: Amount of packages in Nixpkgs
+#+NAME: fig:package-count.png
+#+ATTR_ORG: :width 500
+[[./images/package-count.png]][fn:package-count]
+[fn:package-count]: https://discourse.nixos.org/t/how-many-people-are-paid-to-work-on-nix-nixpkgs/8307/66
+
+** Contributing to The Project
+** Build farms
+** Cache
+
+* Extras
+** NixOS
+
+** home-manager
+
+* Further reading
+
+| Edolstra's thesis on Nix                        | https://edolstra.github.io/pubs/phd-thesis.pdf                                              |
+| Charon: Declarative Provisioning and Deployment | https://github.com/edolstra/edolstra.github.io/blob/master/pubs/charon-releng2013-final.pdf |
+| home-manager options                            | https://nix-community.github.io/home-manager/options.html                                                                                            |
