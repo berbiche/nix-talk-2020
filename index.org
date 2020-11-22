@@ -95,7 +95,7 @@ like ~%make_install~ and ~%configure~.
 - Not possible to do atomic upgrades of a package
   - Race conditions
     #+BEGIN_NOTES
-    Service =hello-world= is running, using the =hello= binary and the =hello.conf= file. Package =hello= is ugpraded and the service, at the same time, having encountered a failure, restarts, using the new binary but the old configuration file.
+    Service =hello-world= is running, using the =hello= binary and the =hello.conf= file. Package =hello= is upgraded and the service, at the same time, having encountered a failure, restarts, using the new binary but the old configuration file.
     #+END_NOTES
 - Only a single version of a component can be installed at a given time
 
@@ -108,7 +108,7 @@ like ~%make_install~ and ~%configure~.
 #+REVEAL: split
 - No concept of /all-or-nothing/
   #+BEGIN_NOTES
-  _all-or-nothing_: That is, either the system succesfully build with all files
+  _all-or-nothing_: That is, either the system successfully build with all files
   correctly installed or fails and does not leave you in a partial install state.
   #+END_NOTES
 - No control over external dependency management (pypi, npm, gems, etc.)
@@ -122,18 +122,42 @@ like ~%make_install~ and ~%configure~.
 - Rollback to previous configurations
 - Atomic installation and upgrade
 - High-level domain-specific language to define a /package/
-- Multiple version of a /package/ can exist
+- Multiple version of a /package/ can coexist
 - Deterministic build of components
-  - As long as Nix expression is deterministic
+  - As long as the derivation is deterministic
   - Implies reproducibility
 
-** The /nix/store
-When you install a /package/, Nix stores the package under the ~/nix/store~,
-with all its dependencies (what is refered to as the closure).
+#+REVEAL: split
+- Sandboxed builds
+  - No network access inside the build environment
+    - Unless a /fixed output derivation/ is produced (the hash of the resulting content is known in advance)
 
+#+BEGIN_NOTES
+Some of the Nix-specific language used in the following slides will be explained further in this section.
+#+END_NOTES
+
+** What Is a Derivation
+- Encode a specific, constant build action
+- The derivation is represented in a syntax (known as /ATerm/) that can be "realized"
+  to build the derivation and have the final package
+
+** What Is a Closure
+"The set of paths that might be accessed in an execution involving the component"[fn:phd-thesis]
+
+Upon building a derivation, Nix will represent the closure using a format known as NAR.
+
+** The /nix/store
+#+ATTR_REVEAL: :frag (appear)
+When you install a /package/, Nix stores the package under the ~/nix/store~,
+with all its dependencies (what is referred to as the closure).
+#+ATTR_REVEAL: :frag (appear)
+All time stamps are discarded from the files and only the executable bit is kept (Unix epoch = 0).
+#+ATTR_REVEAL: :frag (appear)
+The ~/nix/store~ is world-readable on a multi-user installation (the default, with a daemon).
 
 #+REVEAL: split
-Each /package/ is stored under a unique filename
+Each /package/ is stored under a unique /store path/.
+This /store path/ (=/nix/store/hash-derivation_name-version=) is fully deterministic and uses cryptographic hashes that is built upon a derivation's closure.
 #+BEGIN_SRC console
 /nix/store/13xq2f3q1k64w4f8xbvnb4p0g4754wrk-emacs-ox-reveal-20201025.952
 ├── nix-support
@@ -150,13 +174,58 @@ Each /package/ is stored under a unique filename
                     ├── ox-reveal.elc
                     └── ox-reveal-pkg.el
 #+END_SRC
-*** Computing a /Package/'s /store path/
-- 32 characters long base-32 encoded hash
--
 
-** What Is a Closure
-** What Is a Derivation
+*** Why ~/nix/store~ as The Base Directory?
+To allow sharing derivations across machines, the store paths have to be the same.
+
+This will be further expanded later.
+
 ** What Is a "nar"
+The /Nix Archive Format/ (short NAR) fixes incompatibilities of ZIP and TAR with the store model.
+
+This format is what is used to compute hashes of a derivation.
+
+- Omit time stamps of files
+- Omit ownership of files
+- Support files larger than 2^32 bytes
+- Preserve only the executable bit
+- Guarantee an ordering of the files in the archive
+#+BEGIN_NOTES
+It goes that /files/ means both regular files and directories.
+
+The exact format of a NAR is defined in Chapter 5 of Edolstra's thesis.
+Edolstra's thesis is no longer exact on certain properties:
+- Berkeley DB is not used anymore to retain information about the store's state,
+  instead flat files are used.
+#+END_NOTES
+
+** Computing a /Package/'s /store path/
+- 32 characters long base-32 (=0-9a-z= except =e,o,u,t=) encoded hash (160 entropy bits)
+- Determined by the /closure/ of a package
+- Current hashing function: SHA-256
+#+BEGIN_NOTES
+Fun fact: the characters =e,o,u,t= are excluded to prevent the creation of a hash with offensive words.
+#+END_NOTES
+
+#+REVEAL: split
+- Because of the use of symbolic links within the tree, a hash
+  is composed of both the store path and the symbolic name
+- Source inputs and outputs have a different hash to prevent impersonation
+
+#+REVEAL: split
+1.
+
+#+BEGIN_NOTES
+For more information on the cryptographic function, the chapter 5 of Edolstra's thesis goes into the finer defailts of choosing the right hashing function.
+
+Mainly, collision resistance and second preimage resistance.
+
+Collision resistance: making sure no two =x_1= and =x_2= -> =h(x_1) = h(x_2)=
+Second preimage resistance: if =x_1= is known, is it not possible to derive =x_2= such that =h(x_1) = h(x_2)=
+#+END_NOTES
+
+** Fixed Output Path and /Fixed Output Derivations/
+
 
 * Nix : The Language
 
@@ -170,6 +239,8 @@ Each /package/ is stored under a unique filename
 | builtins    | https://nixos.org/manual/nix/unstable/expressions/builtins.html |
 | nixpkgs lib | https://nixos.org/manual/nixpkgs/unstable/#chap-functions       |
 |             |                                                                 |
+
+** Nix REPL
 
 * Nixpkgs : The Package Registry
 #+REVEAL: split
@@ -193,3 +264,6 @@ Each /package/ is stored under a unique filename
 | Edolstra's thesis on Nix                        | https://edolstra.github.io/pubs/phd-thesis.pdf                                              |
 | Charon: Declarative Provisioning and Deployment | https://github.com/edolstra/edolstra.github.io/blob/master/pubs/charon-releng2013-final.pdf |
 | home-manager options                            | https://nix-community.github.io/home-manager/options.html                                                                                            |
+
+* Footnotes
+[fn:phd-thesis] https://github.com/edolstra/edolstra.github.io/blob/master/pubs/phd-thesis.pdf
