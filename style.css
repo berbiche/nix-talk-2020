@@ -8,3 +8,8 @@
 code {
     font-family: 'Source Code Pro', monospace !important;
 }
+
+smaller {
+    /* font-size: max(2em, min(2rem, 2em)); */
+    font-size: 2rem;
+}

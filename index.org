@@ -1,5 +1,5 @@
 #+TITLE: Nix & Nixpkgs for a Reproducible and Declarative Build Environment
-#+AUTHOR: Nicolas Berbiche
+#+AUTHOR: Nicolas
 #+DATE: 2020-11-15
 #+EMAIL: nicolas@normie.dev
 
@@ -12,9 +12,12 @@
 #+REVEAL_MAX_SCALE: 2.5
 #+REVEAL_HLEVEL: 2
 #+REVEAL_THEME: black
-#+REVEAL_POSTAMBLE: <p>Create by %a.</p>
+#+REVEAL_POSTAMBLE: <p>Created by %a.</p>
 #+REVEAL_PLUGINS:(markdown notes highlight)
 #+REVEAL_EXTRA_CSS: style.css
+
+#+REVEAL_TITLE_SLIDE: <h1 class="title">%t</h1>
+# #+REVEAL_TITLE_SLIDE: <h2 class="author">Created by %a</h2>
 
 * Table of Contents
 
@@ -179,7 +182,7 @@ The ~/nix/store~ is world-readable on a multi-user installation (the default, wi
 #+REVEAL: split
 Each /package/ is stored under a unique /store path/.
 This /store path/ (=/nix/store/hash-derivation_name-version=) is fully deterministic and uses cryptographic hashes that is built upon a derivation's closure.
-#+BEGIN_SRC console
+#+BEGIN_EXAMPLE
 /nix/store/13xq2f3q1k64w4f8xbvnb4p0g4754wrk-emacs-ox-reveal-20201025.952
 ├── nix-support
 │   ├── propagated-build-inputs
@@ -194,7 +197,7 @@ This /store path/ (=/nix/store/hash-derivation_name-version=) is fully determini
                     ├── ox-reveal.el
                     ├── ox-reveal.elc
                     └── ox-reveal-pkg.el
-#+END_SRC
+#+END_EXAMPLE
 
 *** Why ~/nix/store~ as The Base Directory?
 To allow sharing derivations across machines, the store paths have to be the same.
@@ -223,11 +226,215 @@ Collision resistance: making sure no two =x_1= and =x_2= -> =h(x_1) = h(x_2)=
 Second preimage resistance: if =x_1= is known, is it not possible to derive =x_2= such that =h(x_1) = h(x_2)=
 #+END_NOTES
 
+** What Is a Channel
+#+TODO: this section
+
 * Nix : The Language
+** Features
+- *DSL* to describe a package
+- Lazy
+- Functional, everything is an expression
+  - Currying, partial application, immutable datastructures
+- Mostly pure, side-effects don't really exist
+- Allows for recursive attribute sets
 
-** Example package with syntax
+#+REVEAL: split
+Although lazy, the language does not support lazy lists like Haskell
+or other languages
+#+BEGIN_SRC sh
+time nix-instantiate --eval -E '
+    with (import <nixpkgs> {}).lib;
+    take 5 (range 0 (15000 * 1000))
+'
+# => 1.18s user 0.23s system 165% cpu 0.856 total
+#+END_SRC
 
-#+ATTR_REVEAL: :code_attribs data-line-numbers="|1-5|7-9|10,14|24-30|32-33|38-43"
+** Syntax
+
+Adapted from [[https://learnxinyminutes.com/docs/nix][Learn X in Y Minutes, Where X=nix]]
+
+#+REVEAL_HTML: <smaller>
+#+ATTR_REVEAL: :code_attribs data-line-numbers='2-4|6-8|10-12|14-25|27-33|35-39|41-51|53-60|62-73|76-82|84-87|89-95|97-98|100-104|106-110|112-121|123-130|132-138|140-146|148-153'
+#+BEGIN_SRC nix
+with builtins; [
+  # Inline comments look like this.
+  /* Multi-line comments
+     look like this. */
+
+  (true && false)
+  (true || false)
+  (if 3 < 4 then "a" else "b")
+
+  1 0 42 (-3)
+  123.43 .27e13
+  (4 + 6 / 2 - 2)
+
+  "Strings literals are in double quotes."
+  "
+    String literals can span
+    multiple lines.
+  "
+  ''
+    a
+      b
+  ''
+  #=> "a\n  b"
+  ("ab" + "cd")   # String concatenation
+  ("Your home directory is ${getEnv "HOME"}")
+
+  (/tmp/tutorials/learn.nix == ./learn.nix == ./.+ "learn.nix")
+  ./. + "learn.nix"  # => Relative folder
+  /.                 # => Root Folder
+  # The / operator must be surrounded by whitespace if
+  # you want it to signify division.
+  7/2        # This is a path literal
+  (7 / 2)    # This is integer division
+
+  (import /tmp/foo.nix)
+  (import "/tmp/foo.nix")
+  (import ./foo.nix)
+  (import "./foo.nix")   # => Error
+  (import <nixpkgs>)
+
+  (let y = x + "b";
+       x = "a";
+   in y + "c")
+
+  # Functions
+  (n: n + 1)
+  ((n: n + 1) 5)   #=> 6
+  # Currying and partial application
+  (let add = a: b: a + b
+       add3 = add 3
+   in add3 5)
+
+  (length [1 2 3 "x"])
+  #=> 4
+  ([1 2 3] ++ [4 5])
+  #=> [1 2 3 4 5]
+  (concatLists [[1 2] [3 4] [5]])
+  #=> [1 2 3 4 5]
+  (flatten [[[1 [ 2]]] [ 3 ] 4])
+  #=> [1 2 3 4]
+
+  (head [1 2 3])
+  #=> 1
+  (init [1 2 3])
+  #=> [1 2]
+  (last [1 2 3])
+  #=> 3
+  (tail [1 2 3])
+  #=> [2 3]
+  (elemAt ["a" "b" "c" "d"] 2)
+  #=> "c"
+  (elem 2 [1 2 3])
+  #=> true
+
+
+  { foo = [1 2]; bar = "x"; }
+  { a = 1; b = 2; }.a
+  #=> 1
+  ({ a = 1; b = 2; } ? a)
+  #=> true
+  ({ a = 1; b = 2; } // { a = 3; c = 4; })
+  #=> { a = 3; b = 2; c = 4; }
+
+  (let a = 1; in     { a = 2; b = a; }.b)
+  #=> 1
+  (let a = 1; in rec { a = 2; b = a; }.b)
+  #=> 2
+
+  # The following notation is syntactic sugar
+  {
+    a.b   = 1;
+    a.c.d = 2;
+    a.c."d.f" = 4;
+  }.a.c
+  #=> { d = 2; "d.f" = 4; }
+
+  ({ a.b = { d = 2; }; }.a.b.c or 1)
+  #=> 1
+
+  {
+    a = { b = 1; };
+    a.b = 2;
+  }
+  #=> attribute 'a.b' at (string):3:5 already defined at (string):2:11
+
+  {
+    a = { b = 1; };
+    a.c = 2;
+  }
+  #=> { a = { b = 1; c = 2; }; }
+
+  (let a = "foo"; in {
+    ${a}.b = "bar";
+  }.foo)
+  #=> { b = "bar"; }
+
+  {
+     "${"foo"}".a = 1;
+     "${"foo"}".b = 2;
+  }
+  #=> error: dynamic attribute 'foo' already defined at (string):1:3
+
+  ({x, y}: x + "-" + y) { x = "a"; y = "b"; }
+  #=> "a-b"
+
+  ({x, y}: []) { x = "a"; y = "b"; z = "c"; }
+  #=> error: anonymous function called with unexpected argument ‘z’
+
+  ({x, y, ...}: x + "-" + y) { x = "a"; y = "b"; z = "c"; }
+  #=> "a-b"
+
+  (
+   (args@{x, y, ...}: removeAttrs args [ "x" "y" ])
+   { x = "a"; y = "b"; z = "c"; }
+  )
+  #=> { z = "c"; }
+  (functionArgs (args@{x, y, ...}: []))
+  #=> { x= false; y = false; }
+
+  (
+    ({x, y ? "y"}: x + y)
+      { x = "x"; }
+  )
+  #=> "xy"
+  (functionArgs ({x, y ? "y"}: x + y))
+  #=> { x = false; y = true; }
+
+  (throw "foo")
+  #=> error: foo
+  (abort "foo")
+  #=> error: evaluation aborted with the following error message: 'foo'
+  (assert 1 > 2; 42)
+  #=> error: assertion failed at (string):1:1
+]
+#+END_SRC
+
+** Nix REPL
+
+#+BEGIN_EXAMPLE sh
+$ nix repl '<nixpkgs>'
+Welcome to Nix version 3.0pre20201020_e0ca98c. Type :? for help.
+
+Loading '<nixpkgs>'...
+Added 12635 variables.
+
+nix-repl> lib.<TAB>
+lib.__unfix                          lib.mapAttrsFlatten
+lib.add                              lib.mapAttrsRecursive
+...
+
+nix-repl> pkgs.hello<TAB>
+pkgs.hello         pkgs.hello-unfree
+
+nix-repl> pkgs.hello
+«derivation /nix/store/j6lmvi01h17w5a1lx41xwgw00j0wbz6g-hello-2.10.drv»
+#+END_EXAMPLE
+
+** Example Package
+#+ATTR_REVEAL: :code_attribs data-line-numbers="1-5|7-9|10,14|24-30|32-33|38|40-45"
 #+BEGIN_SRC nix
 { stdenv, fetchurl, coreutils, pam, groff, sssd
 , sendmailPath ? "/run/wrappers/bin/sendmail"
@@ -266,6 +473,8 @@ stdenv.mkDerivation rec {
   enableParallelBuilding = true;
   doCheck = false;
 
+  passthru.dummy = 1;
+
   meta = with stdenv.lib; {
     description = "A command to run commands as root";
     license = "https://www.sudo.ws/sudo/license.html";
@@ -279,33 +488,14 @@ This is not the full /sudo/ expression.
 #+END_NOTES
 
 ** Links
-
 #+NAME: Links
 #+CAPTION: Useful links
 | builtins    | https://nixos.org/manual/nix/unstable/expressions/builtins.html |
 | nixpkgs lib | https://nixos.org/manual/nixpkgs/unstable/#chap-functions       |
-|             |                                                                 |
 
-** Nix REPL
+** A Minimal Derivation
 
-#+BEGIN_EXAMPLE sh
-$ nix repl '<nixpkgs>'
-Welcome to Nix version 3.0pre20201020_e0ca98c. Type :? for help.
-
-Loading '<nixpkgs>'...
-Added 12635 variables.
-
-nix-repl> lib.<TAB>
-lib.__unfix                          lib.mapAttrsFlatten
-lib.add                              lib.mapAttrsRecursive
-...
-
-nix-repl> pkgs.hello<TAB>
-pkgs.hello         pkgs.hello-unfree
-
-nix-repl> pkgs.hello
-«derivation /nix/store/j6lmvi01h17w5a1lx41xwgw00j0wbz6g-hello-2.10.drv»
-#+END_EXAMPLE
+** Build Phases
 
 * Nixpkgs : The Package Registry
 #+REVEAL: split
