@@ -21,18 +21,21 @@
 
 * Table of Contents
 
+- [[Language][Language]]
 - [[Context][Context]]
   + [[What Is a Package Manager's Role?][What Is a Package Manager's Role?]]
   + [[A Look at RPM][A Look at RPM]]
   + [[Issues With RPM][Issues With RPM]]
   + [[Issues With Most Package Managers][Issues With Most Package Managers]]
+#+REVEAL: split
 - [[Nix : The Package Manager][Nix : The Package Manager]]
   + [[Features][Features]]
-  + [[The /nix/store][The ~/nix/store~]]
-    - [[Computing a /Package/'s /store path/][Computing a /Package/'s /store path/]]
   + [[What Is a Closure][What Is a Closure]]
   + [[What Is a Derivation][What Is a Derivation]]
   + [[What Is a "nar"][What Is a "nar"]]
+  + [[The /nix/store][The ~/nix/store~]]
+    - [[Why ~/nix/store~ as The Base Directory?][Why ~/nix/store~ as The Base Directory?]]
+  + [[Computing a /Package/'s /store path/][Computing a /Package/'s Store Path]]
 #+REVEAL: split
 - [[Nix : The Language][Nix : The Language]]
 - [[Nixpkgs : The Package Registry][Nixpkgs : The Package Registry]]
@@ -43,8 +46,23 @@
   + [[home-manager][home-manager]]
 - [[Further reading][Further Reading]]
 
-* Context
+* Language
+- Package manager
+- Nix
+- Nixpkgs
+#+BEGIN_NOTES
+Let's introduce the language that will be used in the following slides.
 
+- _Package manager_: Essentially, a tool to install bundles on the system.
+  A bundle can be an application, a system library, fonts and more.
+  The Darwin (MacOS) equivalent is =homebrew= and =macports=.
+  The Window's equivalent is =scoop= or the new =winget=.
+- _Nix_ is both the name of the domain-specific language and the package manager
+- _Nixpkgs_ is the central repository that contains all packages used with /Nix/
+  This repository is hosted on GitHub.
+#+END_NOTES
+
+* Context
 ** What Is a Package Manager's Role?
 #+ATTR_REVEAL: :frag (frag-style appear)
 - Keep track of installed packages
@@ -54,7 +72,8 @@
 
 ** A Look at RPM
 #+ATTR_REVEAL: :frag (frag-style appear)
-- Used by Fedora and its derivatives
+- Used by many Linux distributions (Fedora, RHEL, openSUSE, Mageia, etc.)
+- Low-level tool
 - Provides hooks to describe:
   #+ATTR_REVEAL: :frag (frag-style appear)
   - An installation phase
@@ -121,21 +140,31 @@ like ~%make_install~ and ~%configure~.
   #+END_NOTES
 
 * Nix : The Package Manager
+#+BEGIN_NOTES
+This section goes deeper in how the package manager works than is necessary to know for most uses
+#+END_NOTES
+
 ** Features
 #+ATTR_REVEAL: :frag (frag-style appear)
 - Rollback to previous configurations
-- Atomic installation and upgrade
+- Atomic installations and upgrades
 - High-level domain-specific language to define a /package/
 - Multiple versions of a /package/ can coexist
 - Deterministic build of components
-  - As long as the derivation is deterministic
-  - Implies reproducibility
+  + As long as the derivation is deterministic
+  + Implies reproducibility
+- *Cross-platform builds!*
 
 #+REVEAL: split
+#+ATTR_REVEAL: :frag (frag-style appear)
 - Sandboxed builds
-  - No network access inside the build environment
-    Unless the hash of the resulting content is known in advance (fixed output derivation)
-  - The builder starts with absolutely no environment variables
+  #+ATTR_REVEAL: :frag (frag-style appear)
+  + No network access inside the build environment
+    unless the hash of the resulting content is known in advance (fixed output derivation)
+  + The builder starts with absolutely no environment variables
+  + Low-permission users and groups for the build: =nixbld{1..n}=
+- No database = no corruption
+  + A flat file hierarchy is used with file-locks (flock) when building
 
 #+BEGIN_NOTES
 Some of the Nix-specific language used in the following slides will be explained further in this section.
@@ -144,7 +173,79 @@ Some of the Nix-specific language used in the following slides will be explained
 ** What Is a Derivation
 - Encode a specific, constant build action
 - The derivation is represented in a syntax (known as /ATerm/) that can be "realized"
-  to build the derivation and have the final package
+  to build the derivation
+
+#+REVEAL: split
+
+The representation is *not* human readable!
+
+#+BEGIN_EXAMPLE
+Derive([("out","/nix/store/byghkc1k0xmrrl2jk04lp0qipmpmz547-hello-2.10","","")],[("/nix/store/10xi5iv5svzxfdxdjzbq0hyxwkyxg8dr-bash-4.4-p23.drv",["out"]),("/nix/store/72zs0ii6pzw6l12v2wnpyspn10ygayv1-hello-2.10.tar.gz.drv",["out"]),("/nix/store/7bk8andhhffxcb34nhgrgghillmil8xr-stdenv-linux.drv",["out"])],["/nix/store/9krlzvny65gdc8s7kpb6lkx8cd02c25b-default-builder.sh"],"x86_64-linux","/nix/store/516z50fm1jbpcl32qnzy7kynrh0vl22w-bash-4.4-p23/bin/bash",["-e","/nix/store/9krlzvny65gdc8s7kpb6lkx8cd02c25b-default-builder.sh"],[("buildInputs",""),("builder","/nix/store/516z50fm1jbpcl32qnzy7kynrh0vl22w-bash-4.4-p23/bin/bash"),("configureFlags",""),("depsBuildBuild",""),("depsBuildBuildPropagated",""),("depsBuildTarget",""),("depsBuildTargetPropagated",""),("depsHostHost",""),("depsHostHostPropagated",""),("depsTargetTarget",""),("depsTargetTargetPropagated",""),("doCheck","1"),("doInstallCheck",""),("name","hello-2.10"),("nativeBuildInputs",""),("out","/nix/store/byghkc1k0xmrrl2jk04lp0qipmpmz547-hello-2.10"),("outputs","out"),("patches",""),("pname","hello"),("propagatedBuildInputs",""),("propagatedNativeBuildInputs",""),("src","/nix/store/3x7dwzq014bblazs7kq20p9hyzz0qh8g-hello-2.10.tar.gz"),("stdenv","/nix/store/rh9q5l9wf68v4vqnaag13a2ijas25g14-stdenv-linux"),("strictDeps",""),("system","x86_64-linux"),("version","2.10")])
+#+END_EXAMPLE
+
+#+REVEAL: split
+#+REVEAL_HTML: <smaller>
+#+BEGIN_SRC sh
+$ nix show-derivation 'nixpkgs#hello'
+{
+  "/nix/store/m0i10ghpcwhi2dml0dj6b437jjrh8ia3-hello-2.10.drv": {
+    "outputs": {
+      "out": {
+        "path": "/nix/store/byghkc1k0xmrrl2jk04lp0qipmpmz547-hello-2.10"
+      }
+    },
+    "inputSrcs": [
+      "/nix/store/9krlzvny65gdc8s7kpb6lkx8cd02c25b-default-builder.sh"
+    ],
+    "inputDrvs": {
+      "/nix/store/10xi5iv5svzxfdxdjzbq0hyxwkyxg8dr-bash-4.4-p23.drv": [
+        "out"
+      ],
+      "/nix/store/72zs0ii6pzw6l12v2wnpyspn10ygayv1-hello-2.10.tar.gz.drv": [
+        "out"
+      ],
+      "/nix/store/7bk8andhhffxcb34nhgrgghillmil8xr-stdenv-linux.drv": [
+        "out"
+      ]
+    },
+    "platform": "x86_64-linux",
+    "builder": "/nix/store/516z50fm1jbpcl32qnzy7kynrh0vl22w-bash-4.4-p23/bin/bash",
+    "args": [
+      "-e",
+      "/nix/store/9krlzvny65gdc8s7kpb6lkx8cd02c25b-default-builder.sh"
+    ],
+    "env": {
+      "buildInputs": "",
+      "builder": "/nix/store/516z50fm1jbpcl32qnzy7kynrh0vl22w-bash-4.4-p23/bin/bash",
+      "configureFlags": "",
+      "depsBuildBuild": "",
+      "depsBuildBuildPropagated": "",
+      "depsBuildTarget": "",
+      "depsBuildTargetPropagated": "",
+      "depsHostHost": "",
+      "depsHostHostPropagated": "",
+      "depsTargetTarget": "",
+      "depsTargetTargetPropagated": "",
+      "doCheck": "1",
+      "doInstallCheck": "",
+      "name": "hello-2.10",
+      "nativeBuildInputs": "",
+      "out": "/nix/store/byghkc1k0xmrrl2jk04lp0qipmpmz547-hello-2.10",
+      "outputs": "out",
+      "patches": "",
+      "pname": "hello",
+      "propagatedBuildInputs": "",
+      "propagatedNativeBuildInputs": "",
+      "src": "/nix/store/3x7dwzq014bblazs7kq20p9hyzz0qh8g-hello-2.10.tar.gz",
+      "stdenv": "/nix/store/rh9q5l9wf68v4vqnaag13a2ijas25g14-stdenv-linux",
+      "strictDeps": "",
+      "system": "x86_64-linux",
+      "version": "2.10"
+    }
+  }
+}
+#+END_SRC
+#+REVEAL_HTML: </smaller>
 
 ** What Is a Closure
 "The set of paths that might be accessed in an execution involving the component"[fn:phd-thesis]
@@ -152,15 +253,19 @@ Some of the Nix-specific language used in the following slides will be explained
 Upon building a derivation, Nix will represent the closure using a format known as NAR.
 
 ** What Is a "nar"
+#+ATTR_REVEAL: :frag (appear)
 The /Nix Archive Format/ (short NAR) fixes incompatibilities of ZIP and TAR with the store model.
-
+#+ATTR_REVEAL: :frag (appear)
 This format is what is used to compute hashes of a derivation.
+#+ATTR_REVEAL: :frag (appear)
+This is an in-memory representation, NARs are not persisted on the filesystem.
 
-- Omit time stamps of files
-- Omit ownership of files
-- Support files larger than 2^32 bytes
-- Preserve only the executable bit
-- Guarantee an ordering of the files in the archive
+*** NAR Properties
+- Omits time stamps of files
+- Omits ownership of files
+- Supports files larger than 2^32 bytes
+- Preserves only the executable bit (either 444 or 555)
+- Guarantees an ordering of the files in the archive
 #+BEGIN_NOTES
 It goes that /files/ means both regular files and directories.
 
@@ -172,12 +277,14 @@ Edolstra's thesis is no longer exact on certain properties:
 
 ** The /nix/store
 #+ATTR_REVEAL: :frag (appear)
-When you install a /package/, Nix stores the package under the ~/nix/store~,
-with all its dependencies (what is referred to as the closure).
+When you install a /package/, Nix stores the package under the ~/nix/store~ with the closure.
+
 #+ATTR_REVEAL: :frag (appear)
-All time stamps are discarded from the files and only the executable bit is kept (Unix epoch = 0).
+All time stamps are discarded (Unix epoch = 0) from the files.
+
 #+ATTR_REVEAL: :frag (appear)
-The ~/nix/store~ is world-readable on a multi-user installation (the default, with a daemon).
+The ~/nix/store~ is world-readable on a multi-user installation.
+The permission octal is either =644= or =755=.
 
 #+REVEAL: split
 Each /package/ is stored under a unique /store path/.
@@ -201,11 +308,17 @@ This /store path/ (=/nix/store/hash-derivation_name-version=) is fully determini
 
 *** Why ~/nix/store~ as The Base Directory?
 To allow sharing derivations across machines, the store paths have to be the same.
+We call this process substitution.
 
-This will be further expanded later.
+#+BEGIN_NOTES
+- statically compiled packages use libraries from specific paths that are coded
+  at build time
+- dynamic libraries (~ldd binary~) load libraries from a specific path.
+  This path is often injected with a wrapper script.
+#+END_NOTES
 
 ** Computing a /Package/'s /store path/
-- 32 characters long base-32 (=0-9a-z= except =e,o,u,t=) encoded hash (160 entropy bits)
+- 32 characters long base-32 encoded hash (160 entropy bits)
 - Determined by the /closure/ of a package
 - Current hashing function: SHA-256
 #+BEGIN_NOTES
@@ -215,26 +328,79 @@ Fun fact: the characters =e,o,u,t= are excluded to prevent the creation of a has
 #+REVEAL: split
 - Because of the use of symbolic links within the tree, a hash
   is composed of both the store path and the symbolic name
-- Source inputs and outputs have a different hash to prevent impersonation
+- Source inputs and outputs have a different hash to prevent _impersonation_
 
 #+BEGIN_NOTES
-For more information on the cryptographic function, the chapter 5 of Edolstra's thesis goes into the finer defailts of choosing the right hashing function.
+For more information on the cryptographic function, chapter 5 of Edolstra's thesis goes into the finer details of choosing the right hashing function.
 
 Mainly, collision resistance and second preimage resistance.
 
-Collision resistance: making sure no two =x_1= and =x_2= -> =h(x_1) = h(x_2)=
-Second preimage resistance: if =x_1= is known, is it not possible to derive =x_2= such that =h(x_1) = h(x_2)=
+_Collision resistance_: making sure no two =x_1= and =x_2= -> =h(x_1) = h(x_2)=
+_Second preimage resistance_: if =x_1= is known, is it not possible to derive =x_2= such that =h(x_1) = h(x_2)=
 #+END_NOTES
 
-** What Is a Channel
-#+TODO: this section
+** Channels
+- Imperative way to track the version of nixpkgs used by Nix
+- New stable release every 6 month, previous release /end-of-lifed/ 1 month after
+- "rolling release" by tracking an unstable branch
+
+#+BEGIN_NOTES
+I advise not to track master unless you want to build everything from source.
+Channels are just URLs pointing to an archive with a default.nix file inside.
+#+END_NOTES
+
+#+REVEAL: split
+#+REVEAL_HTML: <iframe width="800" height="500" src="https://status.nixos.org/" frameborder="0"></iframe>
+
+#+REVEAL_HTML: <smaller>
+Nixpkgs channels are advanced to a newer revision when a build job succeeds
+  on the Hydra infrastructure
+#+REVEAL_HTML: </smaller>
+
+#+REVEAL: split
+#+BEGIN_QUOTE
+Each channel has an associated jobset on Hydra (Nix CI) that is a collection of individual jobs.
+
+A job roughly corresponds to building a particular package, which itself may depend on other packages built by other jobs.
+#+END_QUOTE
+
+** Generations & Profiles
+This is the part of Nix that allows rollbacks!
+
+#+ATTR_REVEAL: :frag (appear)
+A set of packages built can be referred to as environment.
+#+ATTR_REVEAL: :frag (appear)
+An environment is:
+- =PATH=, =EDITOR=, =LIBEXEC_PATH=, =LOCALE_PATH=, ...
+#+ATTR_REVEAL: :frag (appear)
+An environment can be activated and deactivated, this is referred to as a profile.
+
+#+REVEAL: split
+#+BEGIN_SRC sh
+$ nix-env -f ~/dev/profile.nix -i
+replacing old 'profile'
+installng 'profile'
+#+END_SRC
+
+#+REVEAL: split
+We can make a shell with only the required packages!
+
+#+BEGIN_SRC sh
+$ nix-shell -p fish python38
+$ python --version
+#+END_SRC
+
+#+BEGIN_SRC sh
+$ nix-shell -p fish python39
+$ python --version
+#+END_SRC
 
 * Nix : The Language
 ** Features
 - *DSL* to describe a package
 - Lazy
 - Functional, everything is an expression
-  - Currying, partial application, immutable datastructures
+  + Currying, partial application, immutable datastructures
 - Mostly pure, side-effects don't really exist
 - Allows for recursive attribute sets
 
@@ -254,7 +420,7 @@ time nix-instantiate --eval -E '
 Adapted from [[https://learnxinyminutes.com/docs/nix][Learn X in Y Minutes, Where X=nix]]
 
 #+REVEAL_HTML: <smaller>
-#+ATTR_REVEAL: :code_attribs data-line-numbers='2-4|6-8|10-12|14-25|27-33|35-39|41-51|53-60|62-73|76-82|84-87|89-95|97-98|100-104|106-110|112-121|123-130|132-138|140-146|148-153'
+#+ATTR_REVEAL: :code_attribs data-line-numbers='2-4|6-8|10-12|14-25|27-33|35-41|43-53|55-62|64-75|78-84|86-89|91-97|99-100|102-106|108-112|114-123|125-132|134-140|142-148|150-155'
 #+BEGIN_SRC nix
 with builtins; [
   # Inline comments look like this.
@@ -282,9 +448,9 @@ with builtins; [
   ("ab" + "cd")   # String concatenation
   ("Your home directory is ${getEnv "HOME"}")
 
-  (/tmp/tutorials/learn.nix == ./learn.nix == ./.+ "learn.nix")
-  ./. + "learn.nix"  # => Relative folder
-  /.                 # => Root Folder
+  (/tmp/tutorials/learn.nix == ./learn.nix)
+  (./. + "/learn.nix" == ./learn.nix)
+  /. # => Root Folder
   # The / operator must be surrounded by whitespace if
   # you want it to signify division.
   7/2        # This is a path literal
@@ -292,9 +458,11 @@ with builtins; [
 
   (import /tmp/foo.nix)
   (import "/tmp/foo.nix")
+  ((import /tmp) == (import /tmp/default.nix))
   (import ./foo.nix)
   (import "./foo.nix")   # => Error
   (import <nixpkgs>)
+  (import <my-channel/a-path/sub-path>)
 
   (let y = x + "b";
        x = "a";
@@ -314,7 +482,7 @@ with builtins; [
   #=> [1 2 3 4 5]
   (concatLists [[1 2] [3 4] [5]])
   #=> [1 2 3 4 5]
-  (flatten [[[1 [ 2]]] [ 3 ] 4])
+  (flatten [[[1 [2]]] [3] 4])
   #=> [1 2 3 4]
 
   (head [1 2 3])
@@ -369,7 +537,7 @@ with builtins; [
 
   (let a = "foo"; in {
     ${a}.b = "bar";
-  }.foo)
+  }.${a})
   #=> { b = "bar"; }
 
   {
@@ -433,6 +601,17 @@ nix-repl> pkgs.hello
 «derivation /nix/store/j6lmvi01h17w5a1lx41xwgw00j0wbz6g-hello-2.10.drv»
 #+END_EXAMPLE
 
+#+BEGIN_NOTES
+When invoking =nix_repl=, a channel or an URL can be passed to be loaded.
+The URL/channel
+
+* Nixpkgs : The Package Registry
+#+CAPTION: Amount of packages in Nixpkgs
+#+NAME: fig:package-count.png
+#+ATTR_ORG: :width 500
+[[./images/package-count.png]][fn:package-count]
+[fn:package-count]: https://discourse.nixos.org/t/how-many-people-are-paid-to-work-on-nix-nixpkgs/8307/66
+
 ** Example Package
 #+ATTR_REVEAL: :code_attribs data-line-numbers="1-5|7-9|10,14|24-30|32-33|38|40-45"
 #+BEGIN_SRC nix
@@ -487,38 +666,111 @@ stdenv.mkDerivation rec {
 This is not the full /sudo/ expression.
 #+END_NOTES
 
-** Links
-#+NAME: Links
-#+CAPTION: Useful links
-| builtins    | https://nixos.org/manual/nix/unstable/expressions/builtins.html |
-| nixpkgs lib | https://nixos.org/manual/nixpkgs/unstable/#chap-functions       |
-
-** A Minimal Derivation
-
 ** Build Phases
+Generic phases (in order):
+- =unpackPhase=
+- =patchPhase=
+- =configurePhase=
+- =buildPhase=
+- =checkPhase=
+- =installPhase=
+- =fixupPhase=
+- =installCheckPhase=
+- =distPhase=
 
-* Nixpkgs : The Package Registry
 #+REVEAL: split
-#+CAPTION: Amount of packages in Nixpkgs
-#+NAME: fig:package-count.png
-#+ATTR_ORG: :width 500
-[[./images/package-count.png]][fn:package-count]
-[fn:package-count]: https://discourse.nixos.org/t/how-many-people-are-paid-to-work-on-nix-nixpkgs/8307/66
+Each phase can be (de)activated
+- ~dontUnpack = true;~
+- ~dontPatch = true;~
+- ~dontConfigure = true;~
+- ~dontBuild = true;~
+- ~doCheck = true;~
+- ~dontInstall = true;~
+- ~dontFixup = true;~
+- ~doInstallCheck = true;~
+- ~doDist = true;~
+
+#+REVEAL: split
+Build phases typically have a =pre-phase= and a =post-phase=.
+So =preInstall= and =postInstall=.
+
+** Build farms
+
+** Cache
+The cache of all packages surpasses 300TB!
+
+- Not distributed: infeasible with the current architecture
+
+The cryptographic properties of the =/nix/store= and derivations, allow serving a derivation's result without building locally!
+
+This is what we call a /substituer/.
+#+BEGIN_NOTES
+#+END_NOTES
 
 ** Contributing to The Project
-** Build farms
-** Cache
+
+LIVE DEMO!
 
 * Extras
 ** NixOS
 
+Built on top of Nix, the system configuration is entirely declarative!
+
+*** Overlays
+
 ** home-manager
+
+https://github.com/nix-community/home-manager/
+
+Configure your /dotfiles/ in a cross-platform, distribution-agnostic way!
+
+#+REVEAL: split
+#+BEGIN_SRC nix
+{ pkgs, ... }:
+
+{
+  home.packages = [ pkgs.htop ];
+
+  programs.emacs = {
+    enable = true;
+    extraPackages = epkgs: with epkgs; [
+      nix-mode
+      magit
+    ];
+  };
+
+  programs.alacritty = {
+    enable = lib.mkIf isLinux true;
+    settings = {
+      # ...
+    };
+  };
+
+  # Fictive
+  systemd.user.services.notification = {
+    Service = {
+      Type = "dbus";
+      BusName = "org.freedesktop.notifications";
+      ExecStart = "${pkgs.notification}/bin/notification";
+    };
+  };
+}
+#+END_SRC
 
 * Further reading
 
+#+REVEAL_HTML: <smaller>
 | Edolstra's thesis on Nix                        | https://edolstra.github.io/pubs/phd-thesis.pdf                                              |
 | Charon: Declarative Provisioning and Deployment | https://github.com/edolstra/edolstra.github.io/blob/master/pubs/charon-releng2013-final.pdf |
-| home-manager options                            | https://nix-community.github.io/home-manager/options.html                                                                                            |
+| Nix language built-in functions                 | https://nixos.org/manual/nix/unstable/expressions/builtins.html                             |
+#+REVEAL_HTML: </smaller>
+#+REVEAL: split
+#+REVEAL_HTML: <smaller>
+| Nixpkgs library functions                       | https://nixos.org/manual/nixpkgs/unstable/#chap-functions                                   |
+| NixOS options (search)                          | https://search.nixos.org/options                                                            |
+| NixOS options (full-list)                       | https://nixos.org/manual/nixos/unstable/options.html                                        |
+| home-manager options                            | https://nix-community.github.io/home-manager/options.html                                   |
+#+REVEAL_HTML: </smaller>
 
 * Footnotes
 [fn:phd-thesis] https://github.com/edolstra/edolstra.github.io/blob/master/pubs/phd-thesis.pdf

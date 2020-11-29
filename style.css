@@ -13,3 +13,20 @@ smaller {
     /* font-size: max(2em, min(2rem, 2em)); */
     font-size: 2rem;
 }
+
+.example {
+    white-space: pre-wrap;
+}
+
+.reveal .slides /* *:not(h1):not(h2):not(h3):not(h4):not(h5):not(h6) */ {
+    text-align: left;
+}
+
+h1, h2, h3, h4, h5, h6, iframe {
+    text-align: center;
+}
+
+.reveal .slides section > * {
+    margin-left: 0;
+    margin-right: 0;
+}
